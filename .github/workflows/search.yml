@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  search-and-email:
+  search:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,26 +18,21 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+        run: pip install requests
 
       - name: Run X API search
-        run: |
-          python search_tweets.py --min_likes 1000 --output csv --accounts "denfaminicogame"
+        run: python search_tweets.py --min_likes 1000 --output csv --accounts "denfaminicogame"
         env:
           X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
 
-      - name: Send email
-        uses: dawidd6/action-send-mail@v3
-        if: always()
+      - name: Display results
+        run: |
+          echo "✅ ツイート検索完了"
+          echo ""
+          cat tweets.csv
+          
+      - name: Upload CSV
+        uses: actions/upload-artifact@v4
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.GMAIL_USER }}
-          password: ${{ secrets.GMAIL_PASSWORD }}
-          subject: "🐦 X API検索結果 - 24時間以内1000いいね以上"
-          to: ${{ secrets.RECIPIENT_EMAIL }}
-          from: ${{ secrets.GMAIL_USER }}
-          body: "X API ツイート検索が完了しました。CSVファイルをご確認ください。"
-          attachments: tweets.csv
+          name: tweets-result
+          path: tweets.csv
