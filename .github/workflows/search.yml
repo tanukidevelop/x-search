@@ -1,0 +1,39 @@
+name: X API Search & Email
+
+on:
+  schedule:
+    # 3時、6時、9時、12時、15時、18時、21時（UTC）に実行
+    - cron: '0 3,6,9,12,15,18,21 * * *'
+  workflow_dispatch:  # 手動実行用
+
+jobs:
+  search-and-email:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run X API search
+        id: search
+        run: |
+          python search_tweets.py --min_likes 1000 --output csv --accounts "denfaminicogame"
+        env:
+          X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
+
+      - name: Send email with results
+        run: |
+          python send_email.py
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
