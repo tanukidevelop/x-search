@@ -23,6 +23,7 @@ import yaml
 
 DEFAULT_CONFIG = "config.yaml"
 DEFAULT_MAX_RESULTS = 100
+MIN_LIKES = 1000  # 内部で固定
 
 
 class XAPISearcher:
@@ -169,47 +170,6 @@ def load_config(config_file: str = DEFAULT_CONFIG) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def search_by_query(searcher: 'XAPISearcher', query: str, min_likes: int, max_results: int) -> List[Dict[str, Any]]:
-    """カスタムクエリで検索（from: ではなく任意のクエリ）"""
-    now = datetime.now(timezone.utc)
-    start_time = (now - timedelta(hours=12)).isoformat().replace("+00:00", "Z")
-
-    url = f"{searcher.BASE_URL}/tweets/search/recent"
-    params = {
-        "query": query,
-        "start_time": start_time,
-        "max_results": min(max_results, 100),
-        "tweet.fields": "created_at,public_metrics,author_id",
-        "expansions": "author_id",
-        "user.fields": "username",
-    }
-
-    try:
-        response = requests.get(url, params=params, headers=searcher.headers)
-        response.raise_for_status()
-        data = response.json()
-
-        username_map = {}
-        if "includes" in data and "users" in data["includes"]:
-            for user in data["includes"]["users"]:
-                username_map[user["id"]] = user["username"]
-
-        tweets = []
-        for tweet in data.get("data", []):
-            author_id = tweet.get("author_id")
-            tweet["username"] = username_map.get(author_id, "unknown")
-            if tweet["public_metrics"]["like_count"] >= min_likes:
-                tweets.append(tweet)
-
-        return tweets
-
-    except requests.exceptions.HTTPError as e:
-        print(f"❌ API エラー: {e.response.status_code}")
-        print(f"   詳細: {e.response.text}")
-        return []
-    except Exception as e:
-        print(f"❌ エラー: {e}")
-        return []
 
 
 def main():
@@ -233,31 +193,37 @@ def main():
     try:
         config = load_config(args.config)
 
-        if "search_queries" not in config:
-            raise ValueError("config.yaml に search_queries が定義されていません")
+        if "search_configs" not in config:
+            raise ValueError("config.yaml に search_configs が定義されていません")
 
         output_format = args.output or config.get("global", {}).get("output", "table")
 
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 12時間以内")
+        print(f"❤️ 最小いいね数: {MIN_LIKES}")
         print(f"📄 設定: {args.config}\n")
 
         searcher = XAPISearcher()
         all_tweets = []
 
-        for query_config in config["search_queries"]:
-            name = query_config.get("name", "Unknown")
-            query = query_config.get("query")
-            min_likes = query_config.get("min_likes", 100)
+        for search_config in config["search_configs"]:
+            name = search_config.get("name", "Unknown")
+            accounts = search_config.get("accounts", [])
 
-            if not query:
-                print(f"⚠️  {name}: query が未定義です")
+            if not accounts:
+                print(f"⚠️  {name}: accounts が未定義です")
                 continue
 
-            print(f"📥 {name} を検索中... (最小いいね: {min_likes})")
-            tweets = search_by_query(searcher, query, min_likes, DEFAULT_MAX_RESULTS)
-            all_tweets.extend(tweets)
-            print(f"   ✅ {len(tweets)}件取得")
+            print(f"📥 {name} を検索中...")
+            for account in accounts:
+                print(f"   検索中: @{account}")
+                tweets = searcher.search_tweets(
+                    account=account,
+                    min_likes=MIN_LIKES,
+                    max_results=DEFAULT_MAX_RESULTS,
+                )
+                all_tweets.extend(tweets)
+                print(f"   ✅ {len(tweets)}件取得")
 
         # 新しい順でソート
         all_tweets.sort(

@@ -1,11 +1,12 @@
-search_queries:
+search_configs:
   - name: "電ファミニコゲーマー"
-    query: "from:denfaminicogame"
-    min_likes: 1000
+    accounts:
+      - "denfaminicogame"
 
-  - name: "livedoor ニュース"
-    query: "from:livedoornews"
-    min_likes: 500
+  - name: "ニュースサイト"
+    accounts:
+      - "livedoornews"
+      - "imdb"
 
 global:
   hours: 12
