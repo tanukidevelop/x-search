@@ -48,11 +48,11 @@ class XAPISearcher:
         max_results: int = 100,
     ) -> List[Dict[str, Any]]:
         """
-        指定アカウントから12時間以内のツイートを検索
+        指定アカウントから9時間以内のツイートを検索
         """
-        # 12時間以内のツイートに限定
+        # 9時間以内のツイートに限定
         now = datetime.now(timezone.utc)
-        start_time = (now - timedelta(hours=12)).isoformat().replace("+00:00", "Z")
+        start_time = (now - timedelta(hours=9)).isoformat().replace("+00:00", "Z")
 
         query = f"from:{account}"
 
@@ -200,7 +200,7 @@ def main():
         output_format = args.output or config.get("global", {}).get("output", "table")
 
         print(f"🔍 X API ツイート検索")
-        print(f"📅 期間: 12時間以内")
+        print(f"📅 期間: 9時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
         print(f"📄 アカウント数: {len(accounts)}\n")
 
