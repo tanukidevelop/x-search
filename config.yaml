@@ -1,10 +1,4 @@
-accounts:
-  - "denfaminicogame"
-  - "livedoornews"
-  - "oricon_anime_"
-  - "kagakuadv"
-  - "famitsu"
-
+# アカウント指定なし - キーワード検索のみ
 keywords:
   - "発売"
   - "開催"

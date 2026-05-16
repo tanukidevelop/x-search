@@ -114,20 +114,21 @@ class XAPISearcher:
             return
 
         print(f"\n# 🐦 X API 検索結果: {len(all_tweets)}件\n")
-        
+
         # Markdown テーブル
-        print("| アカウント名 | ツイート内容 | リンク | いいね数 | 経過時間 |")
-        print("|-----------|-----------|--------|--------|---------|")
-        
+        print("| ユーザーID | アカウント名 | ツイート内容 | リンク | いいね数 | 経過時間 |")
+        print("|-----------|-----------|-----------|--------|--------|---------|")
+
         for tweet in all_tweets:
+            author_id = tweet.get("author_id", "N/A")
             username = tweet["username"]
             text = tweet["text"].replace("\n", " ")[:80]
             tweet_id = tweet["id"]
             likes = tweet["public_metrics"]["like_count"]
             time_ago = self.format_time_ago(tweet["created_at"])
             url = f"https://x.com/{username}/status/{tweet_id}"
-            
-            print(f"| @{username} | {text}... | [link]({url}) | {likes:,} | {time_ago} |")
+
+            print(f"| {author_id} | @{username} | {text}... | [link]({url}) | {likes:,} | {time_ago} |")
 
     def export_csv(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.csv"):
         """CSV形式でエクスポート"""
@@ -136,6 +137,7 @@ class XAPISearcher:
                 f,
                 fieldnames=[
                     "id",
+                    "author_id",
                     "username",
                     "text",
                     "likes",
@@ -149,6 +151,7 @@ class XAPISearcher:
                 writer.writerow(
                     {
                         "id": tweet["id"],
+                        "author_id": tweet.get("author_id", ""),
                         "username": tweet["username"],
                         "text": tweet["text"],
                         "likes": tweet["public_metrics"]["like_count"],
@@ -172,6 +175,7 @@ class XAPISearcher:
             data.append(
                 {
                     "id": tweet["id"],
+                    "author_id": tweet.get("author_id", ""),
                     "username": tweet["username"],
                     "text": tweet["text"],
                     "public_metrics": tweet["public_metrics"],
@@ -293,17 +297,20 @@ def main():
     try:
         config = load_config(args.config)
 
-        if "accounts" not in config:
-            raise ValueError("config.yaml に accounts が定義されていません")
-
         accounts = config.get("accounts", [])
         keywords = config.get("keywords", [])
         output_format = args.output or config.get("global", {}).get("output", "table")
 
+        if not keywords:
+            raise ValueError("config.yaml に keywords が定義されていません")
+
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 9時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
-        print(f"📄 アカウント数: {len(accounts)}")
+        if accounts:
+            print(f"📄 アカウント数: {len(accounts)}")
+        else:
+            print(f"📄 検索範囲: 全アカウント（キーワード検索）")
         if keywords:
             print(f"🔑 キーワード数: {len(keywords)}")
         print()
@@ -311,15 +318,33 @@ def main():
         searcher = XAPISearcher()
         all_tweets = []
 
-        # アカウント数が多い場合は複数リクエストに分割
-        account_groups = split_accounts(accounts, MAX_ACCOUNTS_PER_REQUEST)
-        request_count = len(account_groups)
+        if accounts:
+            # アカウント指定ありの場合
+            account_groups = split_accounts(accounts, MAX_ACCOUNTS_PER_REQUEST)
+            request_count = len(account_groups)
+            print(f"📡 APIリクエスト: {request_count}回\n")
 
-        print(f"📡 APIリクエスト: {request_count}回\n")
+            for idx, group in enumerate(account_groups, 1):
+                query = build_or_query(group, keywords)
+                print(f"[{idx}/{request_count}] 🔎 検索クエリ: {query}")
 
-        for idx, group in enumerate(account_groups, 1):
-            query = build_or_query(group, keywords)
-            print(f"[{idx}/{request_count}] 🔎 検索クエリ: {query}")
+                tweets = search_by_query(
+                    searcher,
+                    query=query,
+                    min_likes=MIN_LIKES,
+                    max_results=DEFAULT_MAX_RESULTS,
+                )
+                all_tweets.extend(tweets)
+                print(f"       ✅ {len(tweets)}件取得\n")
+        else:
+            # キーワードのみで全ツイート検索
+            if len(keywords) == 1:
+                query = keywords[0]
+            else:
+                query = f"({' OR '.join(keywords)})"
+
+            print(f"📡 APIリクエスト: 1回\n")
+            print(f"[1/1] 🔎 検索クエリ: {query}")
 
             tweets = search_by_query(
                 searcher,

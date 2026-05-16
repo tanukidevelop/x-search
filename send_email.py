@@ -39,14 +39,16 @@ def create_html_table(tweets: List[Dict[str, Any]]) -> str:
     html = '<table style="border-collapse: collapse; width: 100%; margin-top: 20px;">'
     html += """
     <tr style="background-color: #f0f0f0; border-bottom: 2px solid #333;">
-        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 15%;">アカウント</th>
-        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 45%;">ツイート内容</th>
-        <th style="padding: 12px; text-align: center; border-right: 1px solid #ddd; width: 15%;">投稿時間</th>
-        <th style="padding: 12px; text-align: right; width: 15%;">いいね数</th>
+        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 12%;">ユーザーID</th>
+        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 12%;">アカウント</th>
+        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 40%;">ツイート内容</th>
+        <th style="padding: 12px; text-align: center; border-right: 1px solid #ddd; width: 12%;">投稿時間</th>
+        <th style="padding: 12px; text-align: right; width: 12%;">いいね数</th>
     </tr>
     """
 
     for tweet in tweets:
+        author_id = tweet.get("author_id", "N/A")
         username = tweet["username"]
         text = tweet["text"].replace("<", "&lt;").replace(">", "&gt;")[:30]
         likes = tweet["public_metrics"]["like_count"]
@@ -57,6 +59,7 @@ def create_html_table(tweets: List[Dict[str, Any]]) -> str:
 
         html += f"""
     <tr style="border-bottom: 1px solid #ddd;">
+        <td style="padding: 12px; border-right: 1px solid #ddd; font-size: 0.9em; color: #666;">{author_id}</td>
         <td style="padding: 12px; border-right: 1px solid #ddd;">
             <a href="https://x.com/{username}" style="color: #1DA1F2; text-decoration: none; font-weight: bold;">@{username}</a>
         </td>

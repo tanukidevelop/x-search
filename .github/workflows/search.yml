@@ -39,6 +39,7 @@ jobs:
               for row in reader:
                   tweets.append({
                       'id': row['id'],
+                      'author_id': row['author_id'],
                       'username': row['username'],
                       'text': row['text'],
                       'public_metrics': {'like_count': int(row['likes'])},
