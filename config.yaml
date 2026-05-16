@@ -1,0 +1,12 @@
+search_queries:
+  - name: "電ファミニコゲーマー"
+    query: "from:denfaminicogame"
+    min_likes: 1000
+
+  - name: "livedoor ニュース"
+    query: "from:livedoornews"
+    min_likes: 500
+
+global:
+  hours: 12
+  output: "table"

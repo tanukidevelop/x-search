@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 X API ツイート検索スクリプト
-- 複数アカウントから12時間以内のツイートを検索
-- いいね数でフィルタリング
+- config.yaml で定義された複数の検索クエリを実行
+- 12時間以内のツイートをいいね数でフィルタリング
 - Markdown テーブル形式で表示 & CSV出力
 
 使用方法:
-  python search_tweets.py
-  python search_tweets.py --min_likes 1000
-  python search_tweets.py --output csv
+  python search_tweets.py                    # config.yaml から実行
+  python search_tweets.py --output csv       # CSV形式で出力
+  python search_tweets.py --config custom.yaml  # 別のconfig使用
 """
 
 import os
@@ -19,20 +19,10 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 from urllib.parse import urlencode
 import csv
+import yaml
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ⚙️ 設定セクション
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ACCOUNTS = [
-    "denfaminicogame",
-]
-
-DEFAULT_MIN_LIKES = 1000
+DEFAULT_CONFIG = "config.yaml"
 DEFAULT_MAX_RESULTS = 100
-OUTPUT_FORMAT = "table"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
 class XAPISearcher:
@@ -170,54 +160,102 @@ class XAPISearcher:
         print(f"✅ CSV エクスポート完了: {filename}")
 
 
+def load_config(config_file: str = DEFAULT_CONFIG) -> Dict[str, Any]:
+    """config.yaml から検索クエリを読み込む"""
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"{config_file} が見つかりません")
+
+    with open(config_file, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def search_by_query(searcher: 'XAPISearcher', query: str, min_likes: int, max_results: int) -> List[Dict[str, Any]]:
+    """カスタムクエリで検索（from: ではなく任意のクエリ）"""
+    now = datetime.now(timezone.utc)
+    start_time = (now - timedelta(hours=12)).isoformat().replace("+00:00", "Z")
+
+    url = f"{searcher.BASE_URL}/tweets/search/recent"
+    params = {
+        "query": query,
+        "start_time": start_time,
+        "max_results": min(max_results, 100),
+        "tweet.fields": "created_at,public_metrics,author_id",
+        "expansions": "author_id",
+        "user.fields": "username",
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=searcher.headers)
+        response.raise_for_status()
+        data = response.json()
+
+        username_map = {}
+        if "includes" in data and "users" in data["includes"]:
+            for user in data["includes"]["users"]:
+                username_map[user["id"]] = user["username"]
+
+        tweets = []
+        for tweet in data.get("data", []):
+            author_id = tweet.get("author_id")
+            tweet["username"] = username_map.get(author_id, "unknown")
+            if tweet["public_metrics"]["like_count"] >= min_likes:
+                tweets.append(tweet)
+
+        return tweets
+
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ API エラー: {e.response.status_code}")
+        print(f"   詳細: {e.response.text}")
+        return []
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        return []
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="X API ツイート検索スクリプト（12時間以内）"
+        description="X API ツイート検索スクリプト（config.yaml から実行）"
     )
     parser.add_argument(
-        "--min_likes",
-        type=int,
-        default=DEFAULT_MIN_LIKES,
-        help=f"最小いいね数（デフォルト: {DEFAULT_MIN_LIKES}）",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=DEFAULT_MAX_RESULTS,
-        help=f"取得件数（デフォルト: {DEFAULT_MAX_RESULTS}）",
+        "--config",
+        type=str,
+        default=DEFAULT_CONFIG,
+        help=f"設定ファイルパス（デフォルト: {DEFAULT_CONFIG}）",
     )
     parser.add_argument(
         "--output",
         choices=["table", "csv"],
-        default=OUTPUT_FORMAT,
-        help="出力形式（デフォルト: table）",
-    )
-    parser.add_argument(
-        "--accounts",
-        type=str,
-        help="検索アカウント（カンマ区切り）",
+        help="出力形式（デフォルト: config.yaml から使用）",
     )
 
     args = parser.parse_args()
 
-    accounts = args.accounts.split(",") if args.accounts else ACCOUNTS
-
-    print(f"🔍 X API ツイート検索")
-    print(f"📅 期間: 12時間以内")
-    print(f"❤️ フィルタ: {args.min_likes}いいね以上")
-    print(f"👤 アカウント: {', '.join(accounts)}")
-
     try:
+        config = load_config(args.config)
+
+        if "search_queries" not in config:
+            raise ValueError("config.yaml に search_queries が定義されていません")
+
+        output_format = args.output or config.get("global", {}).get("output", "table")
+
+        print(f"🔍 X API ツイート検索")
+        print(f"📅 期間: 12時間以内")
+        print(f"📄 設定: {args.config}\n")
+
         searcher = XAPISearcher()
         all_tweets = []
 
-        for account in accounts:
-            print(f"\n📥 {account} を検索中...")
-            tweets = searcher.search_tweets(
-                account=account,
-                min_likes=args.min_likes,
-                max_results=args.limit,
-            )
+        for query_config in config["search_queries"]:
+            name = query_config.get("name", "Unknown")
+            query = query_config.get("query")
+            min_likes = query_config.get("min_likes", 100)
+
+            if not query:
+                print(f"⚠️  {name}: query が未定義です")
+                continue
+
+            print(f"📥 {name} を検索中... (最小いいね: {min_likes})")
+            tweets = search_by_query(searcher, query, min_likes, DEFAULT_MAX_RESULTS)
             all_tweets.extend(tweets)
             print(f"   ✅ {len(tweets)}件取得")
 
@@ -230,13 +268,19 @@ def main():
         )
 
         # 出力
-        if args.output == "table":
+        if output_format == "table":
             searcher.print_markdown_table(all_tweets)
-        elif args.output == "csv":
+        elif output_format == "csv":
             searcher.export_csv(all_tweets)
 
+    except FileNotFoundError as e:
+        print(f"❌ エラー: {e}")
+        return 1
     except ValueError as e:
         print(f"❌ エラー: {e}")
+        return 1
+    except Exception as e:
+        print(f"❌ 予期しないエラー: {e}")
         return 1
 
     return 0
