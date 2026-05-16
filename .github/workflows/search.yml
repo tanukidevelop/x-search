@@ -4,8 +4,6 @@ name: X API Search & Email
 # 新しい検索を追加: config.yaml を編集して search_queries に追加してください
 
 on:
-  schedule:
-    - cron: '0 3,7,11,15,19,21 * * *'
   workflow_dispatch:
 
 jobs:
