@@ -34,7 +34,7 @@ def format_time_ago(created_at: str) -> str:
 def create_html_table(tweets: List[Dict[str, Any]]) -> str:
     """ツイートを HTML テーブルで生成"""
     if not tweets:
-        return "<p>条件に合うツイートはありません。</p>"
+        return "<p style='font-size: 1.1em; color: #666;'>0件でした</p>"
 
     html = '<table style="border-collapse: collapse; width: 100%; margin-top: 20px;">'
     html += """
@@ -72,10 +72,16 @@ def create_html_table(tweets: List[Dict[str, Any]]) -> str:
     return html
 
 
-def send_email(recipient: str, subject: str, html_content: str) -> bool:
+def send_email(recipient: str, subject: str, html_content: str, tweet_count: int = 0) -> bool:
     """Gmail SMTP でメール送信"""
     gmail_user = os.getenv("GMAIL_USER")
     gmail_password = os.getenv("GMAIL_PASSWORD")
+
+    # 件名を動的に生成
+    if tweet_count == 0:
+        subject = "Amazonアフィ：該当無し"
+    else:
+        subject = f"Amazonアフィ：{tweet_count}件の候補ツイート"
 
     if not gmail_user or not gmail_password:
         print("❌ エラー: GMAIL_USER または GMAIL_PASSWORD が未設定です")
@@ -161,11 +167,12 @@ if __name__ == "__main__":
     # HTML テーブルを生成
     html_table = create_html_table(tweets)
 
-    # メール送信
+    # メール送信（件数を渡して件名を自動生成）
     success = send_email(
         recipient=recipient,
-        subject=f"🔍 X API 検索結果 - {datetime.now().strftime('%Y年%m月%d日')}",
-        html_content=html_table
+        subject="",  # send_email() 内で動的に生成
+        html_content=html_table,
+        tweet_count=len(tweets)
     )
 
     sys.exit(0 if success else 1)
