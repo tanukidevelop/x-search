@@ -161,6 +161,31 @@ class XAPISearcher:
 
         print(f"✅ CSV エクスポート完了: {filename}")
 
+    def export_json(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.json"):
+        """JSON形式でエクスポート（メール送信用）"""
+        if not all_tweets:
+            print("✅ エクスポートするツイートがありません")
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False)
+            return
+
+        data = []
+        for tweet in all_tweets:
+            data.append(
+                {
+                    "id": tweet["id"],
+                    "username": tweet["username"],
+                    "text": tweet["text"],
+                    "public_metrics": tweet["public_metrics"],
+                    "created_at": tweet["created_at"],
+                }
+            )
+
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        print(f"✅ JSON エクスポート完了: {filename}")
+
 
 def load_config(config_file: str = DEFAULT_CONFIG) -> Dict[str, Any]:
     """config.yaml から検索クエリを読み込む"""

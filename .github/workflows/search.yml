@@ -28,12 +28,38 @@ jobs:
         env:
           X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
 
+      - name: Export to JSON for email
+        run: |
+          python -c "
+          import json
+          import csv
+          tweets = []
+          with open('tweets.csv', 'r', encoding='utf-8') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  tweets.append({
+                      'username': row['username'],
+                      'text': row['text'],
+                      'public_metrics': {'like_count': int(row['likes'])},
+                      'created_at': row['created_at'],
+                  })
+          with open('tweets.json', 'w', encoding='utf-8') as f:
+              json.dump(tweets, f, ensure_ascii=False, indent=2)
+          "
+
+      - name: Send email
+        if: success()
+        run: python send_email.py tweets.json ${{ secrets.RECIPIENT_EMAIL }}
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+
       - name: Display results
         run: |
           echo "✅ ツイート検索完了"
           echo ""
           cat tweets.csv
-          
+
       - name: Upload CSV
         uses: actions/upload-artifact@v4
         with:
