@@ -171,13 +171,26 @@ def load_config(config_file: str = DEFAULT_CONFIG) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def build_or_query(accounts: List[str]) -> str:
-    """アカウント配列から OR クエリを生成"""
+def build_or_query(accounts: List[str], keywords: List[str] = None) -> str:
+    """アカウント配列とキーワード配列から OR クエリを生成"""
     if not accounts:
         raise ValueError("accounts が空です")
+
+    # アカウント部分を生成
     if len(accounts) == 1:
-        return f"from:{accounts[0]}"
-    return f"({' OR '.join(f'from:{acc}' for acc in accounts)})"
+        account_query = f"from:{accounts[0]}"
+    else:
+        account_query = f"({' OR '.join(f'from:{acc}' for acc in accounts)})"
+
+    # キーワードがある場合は追加
+    if keywords:
+        if len(keywords) == 1:
+            keyword_query = keywords[0]
+        else:
+            keyword_query = f"({' OR '.join(keywords)})"
+        return f"{account_query} {keyword_query}"
+
+    return account_query
 
 
 def split_accounts(accounts: List[str], max_per_request: int = MAX_ACCOUNTS_PER_REQUEST) -> List[List[str]]:
@@ -261,12 +274,16 @@ def main():
             raise ValueError("config.yaml に accounts が定義されていません")
 
         accounts = config.get("accounts", [])
+        keywords = config.get("keywords", [])
         output_format = args.output or config.get("global", {}).get("output", "table")
 
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 9時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
-        print(f"📄 アカウント数: {len(accounts)}\n")
+        print(f"📄 アカウント数: {len(accounts)}")
+        if keywords:
+            print(f"🔑 キーワード数: {len(keywords)}")
+        print()
 
         searcher = XAPISearcher()
         all_tweets = []
@@ -278,7 +295,7 @@ def main():
         print(f"📡 APIリクエスト: {request_count}回\n")
 
         for idx, group in enumerate(account_groups, 1):
-            query = build_or_query(group)
+            query = build_or_query(group, keywords)
             print(f"[{idx}/{request_count}] 🔎 検索クエリ: {query}")
 
             tweets = search_by_query(

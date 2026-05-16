@@ -2,6 +2,10 @@ accounts:
   - "denfaminicogame"
   - "livedoornews"
 
+keywords:
+  - "発売"
+  - "開催"
+
 global:
-  hours: 12
+  hours: 9
   output: "table"
