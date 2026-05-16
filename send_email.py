@@ -8,8 +8,27 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
+
+
+def format_time_ago(created_at: str) -> str:
+    """投稿からの経過時間を計算（例：12時間前）"""
+    tweet_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    now = datetime.now(timezone.utc)
+    diff = now - tweet_time
+
+    if diff.total_seconds() < 60:
+        return "今"
+    elif diff.total_seconds() < 3600:
+        minutes = int(diff.total_seconds() / 60)
+        return f"{minutes}分前"
+    elif diff.total_seconds() < 86400:
+        hours = int(diff.total_seconds() / 3600)
+        return f"{hours}時間前"
+    else:
+        days = int(diff.total_seconds() / 86400)
+        return f"{days}日前"
 
 
 def create_html_table(tweets: List[Dict[str, Any]]) -> str:
@@ -20,31 +39,32 @@ def create_html_table(tweets: List[Dict[str, Any]]) -> str:
     html = '<table style="border-collapse: collapse; width: 100%; margin-top: 20px;">'
     html += """
     <tr style="background-color: #f0f0f0; border-bottom: 2px solid #333;">
-        <th style="padding: 10px; text-align: left; border-right: 1px solid #ddd;">アカウント</th>
-        <th style="padding: 10px; text-align: left; border-right: 1px solid #ddd;">ツイート内容</th>
-        <th style="padding: 10px; text-align: center; border-right: 1px solid #ddd;">いいね数</th>
-        <th style="padding: 10px; text-align: center;">投稿時刻</th>
+        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 15%;">アカウント</th>
+        <th style="padding: 12px; text-align: left; border-right: 1px solid #ddd; width: 45%;">ツイート内容</th>
+        <th style="padding: 12px; text-align: center; border-right: 1px solid #ddd; width: 15%;">投稿時間</th>
+        <th style="padding: 12px; text-align: right; width: 15%;">いいね数</th>
     </tr>
     """
 
     for tweet in tweets:
         username = tweet["username"]
-        text = tweet["text"].replace("<", "&lt;").replace(">", "&gt;")[:150]
+        text = tweet["text"].replace("<", "&lt;").replace(">", "&gt;")[:30]
         likes = tweet["public_metrics"]["like_count"]
         created_at = tweet["created_at"]
+        time_ago = format_time_ago(created_at)
         tweet_id = tweet["id"]
         url = f"https://x.com/{username}/status/{tweet_id}"
 
         html += f"""
     <tr style="border-bottom: 1px solid #ddd;">
-        <td style="padding: 10px; border-right: 1px solid #ddd;">
-            <a href="https://x.com/{username}" style="color: #1DA1F2; text-decoration: none;">@{username}</a>
+        <td style="padding: 12px; border-right: 1px solid #ddd;">
+            <a href="https://x.com/{username}" style="color: #1DA1F2; text-decoration: none; font-weight: bold;">@{username}</a>
         </td>
-        <td style="padding: 10px; border-right: 1px solid #ddd;">
-            <a href="{url}" style="color: #1DA1F2; text-decoration: none;">{text}...</a>
+        <td style="padding: 12px; border-right: 1px solid #ddd;">
+            <a href="{url}" style="color: #1DA1F2; text-decoration: none;">{text}</a>
         </td>
-        <td style="padding: 10px; text-align: center; border-right: 1px solid #ddd;">{likes:,}</td>
-        <td style="padding: 10px; text-align: center; font-size: 0.9em; color: #666;">{created_at[:10]}</td>
+        <td style="padding: 12px; text-align: center; border-right: 1px solid #ddd; font-size: 0.9em; color: #666;">{time_ago}</td>
+        <td style="padding: 12px; text-align: right;">{likes:,}</td>
     </tr>
         """
 
