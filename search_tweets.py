@@ -170,6 +170,58 @@ def load_config(config_file: str = DEFAULT_CONFIG) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def build_or_query(accounts: List[str]) -> str:
+    """アカウント配列から OR クエリを生成"""
+    if not accounts:
+        raise ValueError("accounts が空です")
+    if len(accounts) == 1:
+        return f"from:{accounts[0]}"
+    return f"({' OR '.join(f'from:{acc}' for acc in accounts)})"
+
+
+def search_by_query(searcher: 'XAPISearcher', query: str, min_likes: int, max_results: int) -> List[Dict[str, Any]]:
+    """カスタムクエリで検索"""
+    now = datetime.now(timezone.utc)
+    start_time = (now - timedelta(hours=9)).isoformat().replace("+00:00", "Z")
+
+    url = f"{searcher.BASE_URL}/tweets/search/recent"
+    params = {
+        "query": query,
+        "start_time": start_time,
+        "max_results": min(max_results, 100),
+        "tweet.fields": "created_at,public_metrics,author_id",
+        "expansions": "author_id",
+        "user.fields": "username",
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=searcher.headers)
+        response.raise_for_status()
+        data = response.json()
+
+        username_map = {}
+        if "includes" in data and "users" in data["includes"]:
+            for user in data["includes"]["users"]:
+                username_map[user["id"]] = user["username"]
+
+        tweets = []
+        for tweet in data.get("data", []):
+            author_id = tweet.get("author_id")
+            tweet["username"] = username_map.get(author_id, "unknown")
+            if tweet["public_metrics"]["like_count"] >= min_likes:
+                tweets.append(tweet)
+
+        return tweets
+
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ API エラー: {e.response.status_code}")
+        print(f"   詳細: {e.response.text}")
+        return []
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        return []
+
+
 
 
 def main():
@@ -202,20 +254,22 @@ def main():
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 9時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
-        print(f"📄 アカウント数: {len(accounts)}\n")
+        print(f"📄 アカウント数: {len(accounts)}")
+        print(f"📡 1リクエストで検索\n")
 
         searcher = XAPISearcher()
-        all_tweets = []
 
-        for account in accounts:
-            print(f"📥 @{account} を検索中...")
-            tweets = searcher.search_tweets(
-                account=account,
-                min_likes=MIN_LIKES,
-                max_results=DEFAULT_MAX_RESULTS,
-            )
-            all_tweets.extend(tweets)
-            print(f"   ✅ {len(tweets)}件取得")
+        # 複数アカウントを OR で繋ぐ
+        query = build_or_query(accounts)
+        print(f"🔎 検索クエリ: {query}\n")
+
+        all_tweets = search_by_query(
+            searcher,
+            query=query,
+            min_likes=MIN_LIKES,
+            max_results=DEFAULT_MAX_RESULTS,
+        )
+        print(f"✅ {len(all_tweets)}件取得\n")
 
         # 新しい順でソート
         all_tweets.sort(
