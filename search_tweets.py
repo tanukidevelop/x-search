@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 X API ツイート検索スクリプト
-- 複数アカウントから24時間以内のツイートを検索
+- 複数アカウントから12時間以内のツイートを検索
 - いいね数でフィルタリング
-- 見やすいテーブル表示 & CSV出力
+- Markdown テーブル形式で表示 & CSV出力
 
 使用方法:
   python search_tweets.py
@@ -21,20 +21,16 @@ from urllib.parse import urlencode
 import csv
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ⚙️ 設定セクション（ここを編集して追加）
+# ⚙️ 設定セクション
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# 検索対象アカウント（配列）
 ACCOUNTS = [
-    "denfaminicogame",      # 電ファミニコゲーマー
-    # "livedoornews",       # livedoor ニュース（コメントアウトで非表示）
-    # "imdb",               # 追加例
+    "denfaminicogame",
 ]
 
-# デフォルト検索条件
-DEFAULT_MIN_LIKES = 100      # 最小いいね数
-DEFAULT_MAX_RESULTS = 100    # 取得件数（最大100）
-OUTPUT_FORMAT = "table"      # table / csv / json
+DEFAULT_MIN_LIKES = 1000
+DEFAULT_MAX_RESULTS = 100
+OUTPUT_FORMAT = "table"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -57,25 +53,16 @@ class XAPISearcher:
     def search_tweets(
         self,
         account: str,
-        min_likes: int = 100,
+        min_likes: int = 1000,
         max_results: int = 100,
     ) -> List[Dict[str, Any]]:
         """
-        指定アカウントから24時間以内のツイートを検索
-
-        Args:
-            account: アカウント名（@ なし）
-            min_likes: 最小いいね数
-            max_results: 取得件数（10～100）
-
-        Returns:
-            ツイートリスト（min_likes でフィルタリング済み）
+        指定アカウントから12時間以内のツイートを検索
         """
-        # 24時間以内のツイートに限定
+        # 12時間以内のツイートに限定
         now = datetime.now(timezone.utc)
-        start_time = (now - timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+        start_time = (now - timedelta(hours=12)).isoformat().replace("+00:00", "Z")
 
-        # クエリを構築（min_result は X API v2 では使用不可なため削除）
         query = f"from:{account}"
 
         url = f"{self.BASE_URL}/tweets/search/recent"
@@ -93,16 +80,13 @@ class XAPISearcher:
             response.raise_for_status()
             data = response.json()
 
-            # ユーザー名を取得
             username = None
             if "includes" in data and "users" in data["includes"]:
                 username = data["includes"]["users"][0]["username"]
 
-            # ツイートにユーザー名を追加 & いいね数でフィルタリング
             tweets = []
             for tweet in data.get("data", []):
                 tweet["username"] = username
-                # min_likes でフィルタリング（レスポンス側）
                 if tweet["public_metrics"]["like_count"] >= min_likes:
                     tweets.append(tweet)
 
@@ -127,40 +111,31 @@ class XAPISearcher:
         elif diff.total_seconds() < 3600:
             minutes = int(diff.total_seconds() / 60)
             return f"{minutes}分前"
-        elif diff.total_seconds() < 86400:
+        else:
             hours = int(diff.total_seconds() / 3600)
             return f"{hours}時間前"
-        else:
-            days = int(diff.total_seconds() / 86400)
-            return f"{days}日前"
 
-    def print_table(self, all_tweets: List[Dict[str, Any]]):
-        """テーブル形式で表示"""
+    def print_markdown_table(self, all_tweets: List[Dict[str, Any]]):
+        """Markdown テーブル形式で表示"""
         if not all_tweets:
             print("✅ 条件に合うツイートはありません")
             return
 
-        print(f"\n{'='*120}")
-        print(f"📊 検索結果: {len(all_tweets)}件")
-        print(f"{'='*120}\n")
-
-        for i, tweet in enumerate(all_tweets, 1):
-            likes = tweet["public_metrics"]["like_count"]
-            retweets = tweet["public_metrics"]["retweet_count"]
-            time_ago = self.format_time_ago(tweet["created_at"])
-            tweet_id = tweet["id"]
+        print(f"\n# 🐦 X API 検索結果: {len(all_tweets)}件\n")
+        
+        # Markdown テーブル
+        print("| アカウント名 | ツイート内容 | リンク | いいね数 | 経過時間 |")
+        print("|-----------|-----------|--------|--------|---------|")
+        
+        for tweet in all_tweets:
             username = tweet["username"]
+            text = tweet["text"].replace("\n", " ")[:80]
+            tweet_id = tweet["id"]
+            likes = tweet["public_metrics"]["like_count"]
+            time_ago = self.format_time_ago(tweet["created_at"])
             url = f"https://x.com/{username}/status/{tweet_id}"
-
-            # テキストを最初の100文字に短縮
-            text = tweet["text"][:100].replace("\n", " ")
-            if len(tweet["text"]) > 100:
-                text += "..."
-
-            print(f"[{i}] 💬 {text}")
-            print(f"    ❤️ {likes:,} いいね | 🔄 {retweets:,} RT | ⏱ {time_ago}")
-            print(f"    🔗 {url}")
-            print()
+            
+            print(f"| @{username} | {text}... | [link]({url}) | {likes:,} | {time_ago} |")
 
     def export_csv(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.csv"):
         """CSV形式でエクスポート"""
@@ -172,11 +147,9 @@ class XAPISearcher:
             writer = csv.DictWriter(
                 f,
                 fieldnames=[
-                    "id",
                     "username",
                     "text",
                     "likes",
-                    "retweets",
                     "created_at",
                     "url",
                 ],
@@ -186,11 +159,9 @@ class XAPISearcher:
             for tweet in all_tweets:
                 writer.writerow(
                     {
-                        "id": tweet["id"],
                         "username": tweet["username"],
                         "text": tweet["text"],
                         "likes": tweet["public_metrics"]["like_count"],
-                        "retweets": tweet["public_metrics"]["retweet_count"],
                         "created_at": tweet["created_at"],
                         "url": f"https://x.com/{tweet['username']}/status/{tweet['id']}",
                     }
@@ -198,35 +169,10 @@ class XAPISearcher:
 
         print(f"✅ CSV エクスポート完了: {filename}")
 
-    def export_json(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.json"):
-        """JSON形式でエクスポート"""
-        if not all_tweets:
-            print("✅ エクスポートするツイートがありません")
-            return
-
-        data = []
-        for tweet in all_tweets:
-            data.append(
-                {
-                    "id": tweet["id"],
-                    "username": tweet["username"],
-                    "text": tweet["text"],
-                    "likes": tweet["public_metrics"]["like_count"],
-                    "retweets": tweet["public_metrics"]["retweet_count"],
-                    "created_at": tweet["created_at"],
-                    "url": f"https://x.com/{tweet['username']}/status/{tweet['id']}",
-                }
-            )
-
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-        print(f"✅ JSON エクスポート完了: {filename}")
-
 
 def main():
     parser = argparse.ArgumentParser(
-        description="X API ツイート検索スクリプト（24時間以内）"
+        description="X API ツイート検索スクリプト（12時間以内）"
     )
     parser.add_argument(
         "--min_likes",
@@ -242,41 +188,38 @@ def main():
     )
     parser.add_argument(
         "--output",
-        choices=["table", "csv", "json"],
+        choices=["table", "csv"],
         default=OUTPUT_FORMAT,
         help="出力形式（デフォルト: table）",
     )
     parser.add_argument(
         "--accounts",
         type=str,
-        help="検索アカウント（カンマ区切り。指定時はCONFIGを上書き）",
+        help="検索アカウント（カンマ区切り）",
     )
 
     args = parser.parse_args()
 
-    # アカウント指定
     accounts = args.accounts.split(",") if args.accounts else ACCOUNTS
 
     print(f"🔍 X API ツイート検索")
-    print(f"📅 期間: 24時間以内")
+    print(f"📅 期間: 12時間以内")
     print(f"❤️ フィルタ: {args.min_likes}いいね以上")
     print(f"👤 アカウント: {', '.join(accounts)}")
-    print()
 
     try:
         searcher = XAPISearcher()
         all_tweets = []
 
-        # 各アカウントから検索
         for account in accounts:
-            print(f"📥 {account} を検索中...")
+            print(f"\n📥 {account} を検索中...")
             tweets = searcher.search_tweets(
                 account=account,
                 min_likes=args.min_likes,
                 max_results=args.limit,
             )
             all_tweets.extend(tweets)
-            print(f"   ✅ {len(tweets)}件取得\n")
+            print(f"   ✅ {len(tweets)}件取得")
 
         # 新しい順でソート
         all_tweets.sort(
@@ -288,11 +231,9 @@ def main():
 
         # 出力
         if args.output == "table":
-            searcher.print_table(all_tweets)
+            searcher.print_markdown_table(all_tweets)
         elif args.output == "csv":
             searcher.export_csv(all_tweets)
-        elif args.output == "json":
-            searcher.export_json(all_tweets)
 
     except ValueError as e:
         print(f"❌ エラー: {e}")
