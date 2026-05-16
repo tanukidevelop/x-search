@@ -251,17 +251,28 @@ def search_by_query(searcher: 'XAPISearcher', query: str, min_likes: int, max_re
         response.raise_for_status()
         data = response.json()
 
+        # デバッグ：API レスポンス統計
+        total_results = len(data.get("data", []))
+        print(f"       📊 API レスポンス: 合計 {total_results} 件")
+
         username_map = {}
         if "includes" in data and "users" in data["includes"]:
             for user in data["includes"]["users"]:
                 username_map[user["id"]] = user["username"]
 
         tweets = []
+        filtered_count = 0
         for tweet in data.get("data", []):
             author_id = tweet.get("author_id")
             tweet["username"] = username_map.get(author_id, "unknown")
-            if tweet["public_metrics"]["like_count"] >= min_likes:
+            likes = tweet["public_metrics"]["like_count"]
+            if likes >= min_likes:
                 tweets.append(tweet)
+            else:
+                filtered_count += 1
+
+        if filtered_count > 0:
+            print(f"       ❌ フィルタで除外: {filtered_count} 件（いいね数 {min_likes} 未満）")
 
         return tweets
 
