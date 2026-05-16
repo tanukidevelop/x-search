@@ -1,5 +1,10 @@
 name: X API Search & Email
 
+# アカウント設定（ここに追加するだけで反映される）
+env:
+  SEARCH_ACCOUNTS: "denfaminicogame,livedoornews"
+  MIN_LIKES: "1000"
+
 on:
   schedule:
     - cron: '0 3,6,9,12,15,18,21 * * *'
@@ -21,7 +26,7 @@ jobs:
         run: pip install requests
 
       - name: Run X API search
-        run: python search_tweets.py --min_likes 1000 --output csv --accounts "denfaminicogame"
+        run: python search_tweets.py --min_likes ${{ env.MIN_LIKES }} --output csv --accounts "${{ env.SEARCH_ACCOUNTS }}"
         env:
           X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
 
