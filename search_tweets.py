@@ -24,6 +24,7 @@ import yaml
 DEFAULT_CONFIG = "config.yaml"
 DEFAULT_MAX_RESULTS = 100
 MIN_LIKES = 1000  # 内部で固定
+MAX_ACCOUNTS_PER_REQUEST = 10  # 1リクエストあたりの最大アカウント数
 
 
 class XAPISearcher:
@@ -179,6 +180,17 @@ def build_or_query(accounts: List[str]) -> str:
     return f"({' OR '.join(f'from:{acc}' for acc in accounts)})"
 
 
+def split_accounts(accounts: List[str], max_per_request: int = MAX_ACCOUNTS_PER_REQUEST) -> List[List[str]]:
+    """アカウント数が多い場合はグループに分割"""
+    if len(accounts) <= max_per_request:
+        return [accounts]
+
+    groups = []
+    for i in range(0, len(accounts), max_per_request):
+        groups.append(accounts[i:i + max_per_request])
+    return groups
+
+
 def search_by_query(searcher: 'XAPISearcher', query: str, min_likes: int, max_results: int) -> List[Dict[str, Any]]:
     """カスタムクエリで検索"""
     now = datetime.now(timezone.utc)
@@ -254,22 +266,29 @@ def main():
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 9時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
-        print(f"📄 アカウント数: {len(accounts)}")
-        print(f"📡 1リクエストで検索\n")
+        print(f"📄 アカウント数: {len(accounts)}\n")
 
         searcher = XAPISearcher()
+        all_tweets = []
 
-        # 複数アカウントを OR で繋ぐ
-        query = build_or_query(accounts)
-        print(f"🔎 検索クエリ: {query}\n")
+        # アカウント数が多い場合は複数リクエストに分割
+        account_groups = split_accounts(accounts, MAX_ACCOUNTS_PER_REQUEST)
+        request_count = len(account_groups)
 
-        all_tweets = search_by_query(
-            searcher,
-            query=query,
-            min_likes=MIN_LIKES,
-            max_results=DEFAULT_MAX_RESULTS,
-        )
-        print(f"✅ {len(all_tweets)}件取得\n")
+        print(f"📡 APIリクエスト: {request_count}回\n")
+
+        for idx, group in enumerate(account_groups, 1):
+            query = build_or_query(group)
+            print(f"[{idx}/{request_count}] 🔎 検索クエリ: {query}")
+
+            tweets = search_by_query(
+                searcher,
+                query=query,
+                min_likes=MIN_LIKES,
+                max_results=DEFAULT_MAX_RESULTS,
+            )
+            all_tweets.extend(tweets)
+            print(f"       ✅ {len(tweets)}件取得\n")
 
         # 新しい順でソート
         all_tweets.sort(
