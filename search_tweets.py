@@ -193,37 +193,29 @@ def main():
     try:
         config = load_config(args.config)
 
-        if "search_configs" not in config:
-            raise ValueError("config.yaml に search_configs が定義されていません")
+        if "accounts" not in config:
+            raise ValueError("config.yaml に accounts が定義されていません")
 
+        accounts = config.get("accounts", [])
         output_format = args.output or config.get("global", {}).get("output", "table")
 
         print(f"🔍 X API ツイート検索")
         print(f"📅 期間: 12時間以内")
         print(f"❤️ 最小いいね数: {MIN_LIKES}")
-        print(f"📄 設定: {args.config}\n")
+        print(f"📄 アカウント数: {len(accounts)}\n")
 
         searcher = XAPISearcher()
         all_tweets = []
 
-        for search_config in config["search_configs"]:
-            name = search_config.get("name", "Unknown")
-            accounts = search_config.get("accounts", [])
-
-            if not accounts:
-                print(f"⚠️  {name}: accounts が未定義です")
-                continue
-
-            print(f"📥 {name} を検索中...")
-            for account in accounts:
-                print(f"   検索中: @{account}")
-                tweets = searcher.search_tweets(
-                    account=account,
-                    min_likes=MIN_LIKES,
-                    max_results=DEFAULT_MAX_RESULTS,
-                )
-                all_tweets.extend(tweets)
-                print(f"   ✅ {len(tweets)}件取得")
+        for account in accounts:
+            print(f"📥 @{account} を検索中...")
+            tweets = searcher.search_tweets(
+                account=account,
+                min_likes=MIN_LIKES,
+                max_results=DEFAULT_MAX_RESULTS,
+            )
+            all_tweets.extend(tweets)
+            print(f"   ✅ {len(tweets)}件取得")
 
         # 新しい順でソート
         all_tweets.sort(

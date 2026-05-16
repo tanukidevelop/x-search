@@ -1,12 +1,6 @@
-search_configs:
-  - name: "電ファミニコゲーマー"
-    accounts:
-      - "denfaminicogame"
-
-  - name: "ニュースサイト"
-    accounts:
-      - "livedoornews"
-      - "imdb"
+accounts:
+  - "denfaminicogame"
+  - "livedoornews"
 
 global:
   hours: 12
