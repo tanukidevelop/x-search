@@ -131,10 +131,6 @@ class XAPISearcher:
 
     def export_csv(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.csv"):
         """CSV形式でエクスポート"""
-        if not all_tweets:
-            print("✅ エクスポートするツイートがありません")
-            return
-
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
                 f,
@@ -159,7 +155,7 @@ class XAPISearcher:
                     }
                 )
 
-        print(f"✅ CSV エクスポート完了: {filename}")
+        print(f"✅ CSV エクスポート完了: {filename} ({len(all_tweets)}件)")
 
     def export_json(self, all_tweets: List[Dict[str, Any]], filename: str = "tweets.json"):
         """JSON形式でエクスポート（メール送信用）"""
