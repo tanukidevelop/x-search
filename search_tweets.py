@@ -135,6 +135,7 @@ class XAPISearcher:
             writer = csv.DictWriter(
                 f,
                 fieldnames=[
+                    "id",
                     "username",
                     "text",
                     "likes",
@@ -147,6 +148,7 @@ class XAPISearcher:
             for tweet in all_tweets:
                 writer.writerow(
                     {
+                        "id": tweet["id"],
                         "username": tweet["username"],
                         "text": tweet["text"],
                         "likes": tweet["public_metrics"]["like_count"],
